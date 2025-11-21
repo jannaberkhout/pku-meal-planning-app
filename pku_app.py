@@ -10,16 +10,22 @@ if "dagplanning" not in st.session_state:
 
 
 # Upload bestand
-uploaded_file = st.file_uploader("Upload je bestand (CSV of Excel)", type=["csv", "xlsx"])
+bron = st.radio("Kies gegevensbron:", ["Upload bestand", "Gebruik voorbeeldbestand"])
 
-if uploaded_file:
+if bron == "Upload bestand":
+    uploaded_file = st.file_uploader("Upload je bestand (CSV of Excel)", type=["csv", "xlsx"])
+    if uploaded_file:
     # Lees bestand
-    if uploaded_file.name.endswith(".csv"):
-        df = pd.read_csv(uploaded_file, sep=';')
-    else:
-        df = pd.read_excel(uploaded_file)
+        if uploaded_file.name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file, sep=';')
+        else:
+            df = pd.read_excel(uploaded_file)
+else:
+    df = pd.read_csv("data/product_list.csv", sep=';') 
 
 
+# ✅ Alleen verder als df bestaat
+if 'df' in locals():
 
 # Conversie naar float
     for col in ["Eiwit (g) per 100 gram", "Energie (kcal) per 100 gram"]:
