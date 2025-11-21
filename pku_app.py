@@ -35,7 +35,7 @@ if 'df' in locals():
             .str.replace(",", ".")
             .str.strip()
         )
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+        df[col] = pd.to_numeric(df[col], errors="raise").fillna(0)
 
     # Waarschuwing bij veel nullen (hier: waarden die 0 zijn)
     null_ratio_eiwit = (df["Eiwit (g) per 100 gram"] == 0).mean()
