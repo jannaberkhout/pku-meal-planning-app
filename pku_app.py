@@ -54,12 +54,11 @@ if 'df' in locals():
 
     #Filter op maaltijd type
     maaltijd_type = st.selectbox("Kies maaltijd:", ["Ontbijt", "Tussendoor", "Lunch", "Snack", "Avondeten"])
-    
 
     # multi-select op kleur
     alle_kleuren = ["groen", "oranje", "rood"]
     gekozen_kleuren = st.multiselect(
-        "Filter op kleurgroep:",alle_kleuren)
+        "Filter op kleurgroep:",alle_kleuren, default=alle_kleuren)
 
     # Normaliseer eventueel spaties/hoofdletters
     df["Kleurgroep"] = df["Kleurgroep"].astype(str).str.strip().str.lower()
