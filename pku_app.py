@@ -47,15 +47,37 @@ if 'df' in locals():
     st.write("📊 Gegevens ingeladen:")
     st.dataframe(df)
 
+    
+    # --- Kleurhulpjes ---
+    kleur_emojis = {"groen": "🟢", "oranje": "🟠", "rood": "🔴"}
+    kleur_hex = {"groen": "#2ecc71", "oranje": "#f39c12", "rood": "#e74c3c"}
 
-
-    # Filter op Productgroep en Maaltijd type
+    #Filter op maaltijd type
     maaltijd_type = st.selectbox("Kies maaltijd:", ["Ontbijt", "Tussendoor", "Lunch", "Snack", "Avondeten"])
-    productgroepen = df["Productgroep"].unique()
+    
+
+    # multi-select op kleur
+    alle_kleuren = ["groen", "oranje", "rood"]
+    gekozen_kleuren = st.multiselect(
+        "Filter op kleurgroep:",alle_kleuren)
+
+    # Normaliseer eventueel spaties/hoofdletters
+    df["Kleurgroep"] = df["Kleurgroep"].astype(str).str.strip().str.lower()
+    default=alle_kleuren  # start met alles aan
+    format_func=lambda k: f"{kleur_emojis.get(k,'')} {k.capitalize()}"
+
+    # --- Extra filters:  Productgroep + Kleurgroep ---
+    productgroepen = sorted(df["Productgroep"].dropna().unique())
     gekozen_groep = st.selectbox("Kies een productgroep:", productgroepen)
 
-    # Filter producten binnen gekozen groep
-    gefilterde_df = df[df["Productgroep"] == gekozen_groep]
+    # Filter op groep én kleur
+    mask = (df["Productgroep"] == gekozen_groep) & (df["Kleurgroep"].isin(gekozen_kleuren))
+    gefilterde_df = df.loc[mask].copy()
+
+    if gefilterde_df.empty:
+        st.info("Geen producten voor deze combinatie van filters.")
+        st.stop()
+
     product = st.selectbox("Kies een product:", gefilterde_df["Naam"].unique())
 
     # Invoer hoeveelheid
