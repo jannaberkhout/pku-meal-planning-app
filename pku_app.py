@@ -48,22 +48,23 @@ if 'df' in locals():
     st.dataframe(df)
 
     
-    # --- Kleurhulpjes ---
-    kleur_emojis = {"groen": "🟢", "oranje": "🟠", "rood": "🔴"}
-    kleur_hex = {"groen": "#2ecc71", "oranje": "#f39c12", "rood": "#e74c3c"}
+
 
     #Filter op maaltijd type
     maaltijd_type = st.selectbox("Kies maaltijd:", ["Ontbijt", "Tussendoor", "Lunch", "Snack", "Avondeten"])
 
     # multi-select op kleur
-    alle_kleuren = ["groen", "oranje", "rood"]
-    gekozen_kleuren = st.multiselect(
-        "Filter op kleurgroep:",alle_kleuren, default=alle_kleuren)
+
+    # --- Kleurhulpjes ---
+    kleur_emojis = {"groen": "🟢", "oranje": "🟠", "rood": "🔴"}
 
     # Normaliseer eventueel spaties/hoofdletters
-    df["Kleurgroep"] = df["Kleurgroep"].astype(str).str.strip().str.lower()
+    alle_kleuren = ["groen", "oranje", "rood"]
     default=alle_kleuren  # start met alles aan
     format_func=lambda k: f"{kleur_emojis.get(k,'')} {k.capitalize()}"
+    gekozen_kleuren = st.multiselect(
+        "Filter op kleurgroep:",alle_kleuren, default, format_func=format_func)
+
 
     # --- Extra filters:  Productgroep + Kleurgroep ---
     productgroepen = sorted(df["Productgroep"].dropna().unique())
