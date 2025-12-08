@@ -82,7 +82,12 @@ if 'df' in locals():
     product_kleur = df.loc[df["Naam"] == product]["Kleurgroep"].values[0]
 
     # Invoer hoeveelheid
-    hoeveelheid = st.number_input("Voer hoeveelheid in (gram):", min_value=1.0, step=1.0)
+
+    # Converteer Hoeveelheid gram/ml naar integer
+    hoeveelheid_str = gefilterde_df.loc[gefilterde_df["Naam"] == product, "Hoeveelheid gram/ml"].values[0]
+    hoeveelheid_per_vse = int(''.join(filter(str.isdigit, hoeveelheid_str))) if hoeveelheid_str else 0
+
+    hoeveelheid = st.number_input("Voer hoeveelheid in (gram):", min_value=1, step=1, value=hoeveelheid_per_vse)
     
     # Instelbare drempel
     drempel_eiwit = st.slider("Stel eiwit-drempel in (gram):", min_value=1.0, max_value=20.0, value=5.0, step=0.1)
