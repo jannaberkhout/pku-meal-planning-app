@@ -78,7 +78,8 @@ if 'df' in locals():
         st.info("Geen producten voor deze combinatie van filters.")
         st.stop()
 
-    product = st.selectbox("Kies een product:", gefilterde_df["Naam"].unique())
+    product = st.selectbox("Kies een product:", gefilterde_df["Naam"].unique(), format_func= format_func)
+    product_kleur = df.loc[df["Naam"] == product]["Kleurgroep"].values[0]
 
     # Invoer hoeveelheid
     hoeveelheid = st.number_input("Voer hoeveelheid in (gram):", min_value=1.0, step=1.0)
@@ -105,7 +106,7 @@ if 'df' in locals():
     st.write(f"- **Totaal eiwit:** {totaal_eiwit:.2f} g")
     st.write(f"- **Totaal energie:** {totaal_energie:.2f} kcal")
     st.write(f"- **Aantal VSE:** {aantal_vse:.2f} (1 VSE = {hoeveelheid_per_vse} gram)")
-
+    st.write(f"- **Kleurgroep:** {kleur_emojis.get(product_kleur,'')} {product_kleur.capitalize()}")
 
     if st.button("➕ Voeg toe aan dagplanning"):
         st.session_state["dagplanning"].append({
@@ -114,7 +115,8 @@ if 'df' in locals():
             "Hoeveelheid (g)": hoeveelheid,
             "Eiwit (g)": round(totaal_eiwit, 2),
             "Energie (kcal)": round(totaal_energie, 2),
-            "Aantal VSE": round(aantal_vse, 2)
+            "Aantal VSE": round(aantal_vse, 2),
+            "Kleurgroep": f"{product_kleur}"
         })
 
 # Toon dagplanning
@@ -167,7 +169,7 @@ if st.session_state["dagplanning"]:
     # Toon tabel met verwijderknoppen
     for i, item in enumerate(st.session_state["dagplanning"]):
         st.write(f"{i+1}. {item['Maaltijd']} - {item['Product']} ({item['Hoeveelheid (g)']} g) | "
-                 f"Eiwit: {item['Eiwit (g)']} g | Energie: {item['Energie (kcal)']} kcal | VSE: {item['Aantal VSE']}")
+                 f"Eiwit: {item['Eiwit (g)']} g | Energie: {item['Energie (kcal)']} kcal | VSE: {item['Aantal VSE']} {kleur_emojis.get(product_kleur,'')}")
         if st.button(f"❌ Verwijder item {i+1}", key=f"remove_{i}"):
             st.session_state["dagplanning"].pop(i)
             st.rerun()  # herlaad de app om lijst te upd
