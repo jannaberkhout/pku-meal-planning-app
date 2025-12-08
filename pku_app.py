@@ -169,7 +169,7 @@ if st.session_state["dagplanning"]:
     # Toon tabel met verwijderknoppen
     for i, item in enumerate(st.session_state["dagplanning"]):
         st.write(f"{i+1}. {item['Maaltijd']} - {item['Product']} ({item['Hoeveelheid (g)']} g) | "
-                 f"Eiwit: {item['Eiwit (g)']} g | Energie: {item['Energie (kcal)']} kcal | VSE: {item['Aantal VSE']} {kleur_emojis.get(product_kleur,'')}")
+                 f"Eiwit: {item['Eiwit (g)']} g | Energie: {item['Energie (kcal)']} kcal | VSE: {item['Aantal VSE']} {kleur_emojis.get(item["Kleurgroep"],'')}")
         if st.button(f"❌ Verwijder item {i+1}", key=f"remove_{i}"):
             st.session_state["dagplanning"].pop(i)
             st.rerun()  # herlaad de app om lijst te upd
