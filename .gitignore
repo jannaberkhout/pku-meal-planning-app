@@ -1,1 +1,4 @@
 .venv
+.DS_Store
+__pycache__/ai.cpython-312.pyc
+__pycache__/helper.cpython-312.pyc
