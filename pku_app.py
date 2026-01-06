@@ -50,6 +50,7 @@ if 'df' in locals():
         df_solver = df
 
         drempel_eiwit = st.slider("Stel eiwit-drempel in (gram):", min_value=1.0, max_value=50.0, value=10.0, step=0.1)
+        drempel_kcal = st.slider("Stel max kcal in:", min_value=1.0, max_value=3000.0, value=1000.0, step=1.0)
         min_serv_vse   = st.number_input("Minimale portiegrootte (VSE)", value=0.5, min_value=0.1, step=0.1)
         max_serv_vse   = st.number_input("Maximale portiegrootte (VSE)", value=2.0, min_value=min_serv_vse, step=0.1)
         uniek_product  = st.checkbox("Voorkom hetzelfde product in meerdere maaltijden", value=True)
@@ -59,6 +60,7 @@ if 'df' in locals():
                 plan_df, totals = solve_plan_pulp(
                     df_solver,
                     protein_limit= drempel_eiwit,
+                    kcal_limit= drempel_kcal,
                     min_serv=min_serv_vse,
                     max_serv=max_serv_vse,
                     unique_product=uniek_product
@@ -71,7 +73,7 @@ if 'df' in locals():
                 st.warning(f"Geen optimaal plan (status: {totals.get('status','n/a')}). "
                         "Verhoog de daglimiet of verlaag min. VSE")
             else:
-                st.subheader("✨ Voorgestelde dagindeling (meerdere producten)")
+                st.subheader("✨ Voorgestelde dagindeling")
                 st.dataframe(plan_df, use_container_width=True)
                 st.write(totals)
 
