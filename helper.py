@@ -129,8 +129,28 @@ def _build_index_by_tag(cands: pd.DataFrame):
                 by[t].append(i)
     return by
 
+
+# Minima per slot (pas aan naar jouw voorkeur)
+SLOT_MIN_PROTEIN = {
+    'ontbijt': 0.3,   # gram
+    'fruit':   0.0,
+    'lunch':   0.5,
+    'snack':   0.0,
+    'avondeten': 1.0
+}
+
+SLOT_MIN_KCAL = {
+    'ontbijt': 150,   # kcal
+    'fruit':    50,
+    'lunch':   300,
+    'snack':   100,
+    'avondeten': 350
+}
+
+
 def solve_plan_pulp(df: pd.DataFrame,
                     protein_limit: float,
+                    kcal_limit: float,
                     min_serv: float,
                     max_serv: float,
                     unique_product: bool = True):
@@ -157,8 +177,29 @@ def solve_plan_pulp(df: pd.DataFrame,
             prob += s[(slot,i)] <= max_serv * y[(slot,i)]
             prob += s[(slot,i)] >= min_serv * y[(slot,i)]
 
-        # 'meerdere producten' constraint
-        prob += pulp.lpSum(y[(slot,i)] for i in range(len(cands))) <= 3
+        
+    # --- NIEUW: aantal items per slot ---
+        count = pulp.lpSum(y[(slot,i)] for i in range(len(cands)))
+        if slot in ['fruit', 'snack']:
+            # Exact 1 item
+            prob += count == 1
+        else:
+            # Ontbijt/lunch/avondeten: minimaal 1, maximaal 3
+            prob += count >= 1
+            prob += count <= 3
+
+        # --- NIEUW: slot-minima op eiwit en kcal ---
+        slot_protein = pulp.lpSum(s[(slot,i)] * candidates[slot].loc[i, 'protein_vse']
+                                  for i in range(len(cands)))
+        slot_kcal    = pulp.lpSum(s[(slot,i)] * candidates[slot].loc[i, 'kcal_vse']
+                                  for i in range(len(cands)))
+        
+# Alleen toevoegen als er een minimum is geconfigureerd
+        if slot in SLOT_MIN_PROTEIN:
+            prob += slot_protein >= SLOT_MIN_PROTEIN[slot]
+        if slot in SLOT_MIN_KCAL:
+            prob += slot_kcal    >= SLOT_MIN_KCAL[slot]
+
 
     # Daglimiet eiwit
     total_protein = pulp.lpSum(
@@ -167,6 +208,19 @@ def solve_plan_pulp(df: pd.DataFrame,
         if (slot,i) in s
     )
     prob += total_protein <= protein_limit
+
+
+    # Totale kcal (voor doel en grenzen)
+    total_kcal = pulp.lpSum(
+        s[(slot,i)] * candidates[slot].loc[i, 'kcal_vse']
+        for slot in slots for i in range(len(candidates[slot]))
+        if (slot,i) in s
+    )
+    # Bovengrens kcal (optioneel)
+    if kcal_limit is not None:
+        prob += total_kcal <= kcal_limit
+        prob += total_kcal >= kcal_limit*0.85
+
 
     # (Optioneel) voorkom hergebruik van exact hetzelfde product (over alle maaltijden)
     if unique_product:
@@ -203,7 +257,7 @@ def solve_plan_pulp(df: pd.DataFrame,
         # (3) servings koppeling: ~1 beleg per snee (marge toegestaan)
         prob += SP_s == BB_s
 
-    # --- NIEUW: diner compositie (groente + carb + eiwit óf samengesteld) ---
+    # diner compositie (groente + carb + eiwit óf samengesteld) ---
     slot = 'avondeten'
     comp_idx = idx_by_slot[slot]['composed']
     veg_idx  = idx_by_slot[slot]['veg']
@@ -239,15 +293,6 @@ def solve_plan_pulp(df: pd.DataFrame,
             prob += CARB_s >= CARB_MIN - M * COMP
         if len(prot_idx) > 0:
             prob += PROT_s >= PROT_MIN - M * COMP
-
-
-    # Doel: maximaliseer kcal
-    total_kcal = pulp.lpSum(
-        s[(slot,i)] * candidates[slot].loc[i, 'kcal_vse']
-        for slot in slots for i in range(len(candidates[slot]))
-        if (slot,i) in s
-    )
-    prob += total_kcal
 
     prob.solve(pulp.PULP_CBC_CMD(msg=False))
     status = pulp.LpStatus[prob.status]
