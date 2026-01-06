@@ -1,7 +1,7 @@
 import pandas as pd # type: ignore
 
 # --- HELPER: kolomnamen normaliseren en decimale komma's ---
-def prepare_df_for_solver(df: pd.DataFrame) -> pd.DataFrame:
+def prepare_df(df: pd.DataFrame) -> pd.DataFrame:
     df = df.rename(columns={
         'Naam': 'naam',
         'Eiwit (g) per 100 gram': 'protein_100g',
@@ -22,14 +22,11 @@ def prepare_df_for_solver(df: pd.DataFrame) -> pd.DataFrame:
             .str.replace(",", ".", regex=False)
             .str.strip()
         )
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-
-    # Verwijder rijen zonder geldige per-VSE waarden
-    df = df[df['protein_vse'].notnull() & df['kcal_vse'].notnull()]
+        df[col] = pd.to_numeric(df[col], errors='raise').fillna(0)
+    
     return df
 
-
-# --- HELPER: maaltijdgroepen en VSE-geschiktheid ---
+# --- HELPER: maaltijdgroepen ---
 ACCEPTABLE_VSE = {
     'ontbijt': ['1 portie','1 schaaltje','1 glas','1 snee','1 stuk'],
     'fruit':   ['1 stuk','1 schaaltje','1 handje','1 glas'],
@@ -43,31 +40,94 @@ MEAL_GROUPS = {
         'Graanproducten, pappen en bindmiddelen',
         'Brood en crackers',
         'Melk/yoghurtdrank',
-        'Melkproducten- Nagerechten'
+        'Melkproducten- Nagerechten',
+        'Kaas',
+        'Broodbeleg, hartig',
+        'Broodbeleg, zoet'
     ],
     'fruit': ['Fruit'],
-    'lunch': ['Brood en crackers', 'Salades', 'Samengestelde gerechten', 'Soepen'],
-    'snack': ['Gebak en koek', 'Snacks', 'Noten, zaden en chips', 'Chocola'],
-    'avondeten': ['Samengestelde gerechten', 'Aardappelen en knolgewassen',
-                  'Groenten en peulvruchten', 'Vis', 'Vlees en vleeswaren', 'Vegetarische producten']
+    'lunch': ['Brood en crackers', 
+              'Salades', 
+              'Samengestelde gerechten', 
+              'Soepen', 
+              'Kaas',
+              'Broodbeleg, hartig',
+              'Broodbeleg, zoet'],
+    'snack': ['Gebak en koek', 
+              'Snacks', 
+              'Noten, zaden en chips', 
+              'Chocola'],
+    'avondeten': ['Samengestelde gerechten', 
+                  'Aardappelen en knolgewassen',
+                  'Groenten en peulvruchten', 
+                  'Vis', 
+                  'Vlees en vleeswaren', 
+                  'Vegetarische producten']
 }
 
 EXCLUDE_GROUPS = {'Vetten, oliën en hartige sauzen', 'Kruiden en specerijen', 'Dieetpreparaten'}
 
 
-def get_candidates(df: pd.DataFrame, slot_key: str, top_n: int = 50) -> pd.DataFrame:
+import re
+
+#geeft per kandidaat tags voor combinatieregels
+def component_tags(row) -> set[str]:
+    g   = (row['productgroep'] or '').strip()
+    nm  = (row['naam'] or '').strip().lower()
+    vse = (row['vse_label'] or '').strip().lower()
+    tags = set()
+
+    # --- broodbasis ---
+    if g == 'Brood en crackers':
+        tags.add('bread_base')
+        # brood telt ook als koolhydraat (voor diner)
+        tags.add('carb')
+
+    # --- broodbeleg (hartig/zoet/kaas) ---
+    # prima indicator is VSE 'voor 1 snee' of smeer/spread in naam
+    if g in {'Broodbeleg, hartig', 'Broodbeleg, zoet', 'Kaas'} or \
+       ('voor 1 snee' in vse) or \
+       re.search(r'\b(smeer|spread|heksenkaas|baba|pasta|tapena(de)?|tah(i|ini)nh?)\b', nm):
+        tags.add('bread_spread')
+
+    # --- groente ---
+    if g == 'Groenten en peulvruchten':
+        tags.add('veg')
+
+    # --- koolhydraat ---
+    if g in {'Aardappelen en knolgewassen', 'Graanproducten, pappen en bindmiddelen'}:
+        tags.add('carb')
+
+    # --- eiwitbron ---
+    if g in {'Vis', 'Vlees en vleeswaren', 'Vegetarische producten', 'Eieren'}:
+        tags.add('protein')
+
+    # --- samengesteld gerecht ---
+    if g == 'Samengestelde gerechten':
+        tags.add('composed')
+
+    return tags
+
+def get_candidates(df: pd.DataFrame, slot_key: str, top_n: int = 200) -> pd.DataFrame:
     """Beperk tot realistische kandidaten per maaltijdslot."""
     groups = MEAL_GROUPS[slot_key]
     c = df[df['productgroep'].isin(groups)].copy()
     c = c[~c['productgroep'].isin(EXCLUDE_GROUPS)]
     c = c[c['vse_label'].isin(ACCEPTABLE_VSE[slot_key])]
     c = c[c['kcal_vse'] > 0]
+    c['tags'] = c.apply(component_tags, axis=1)
     # Houd de laagste-eiwit opties om het oplossen makkelijker te maken
     c = c.sort_values('protein_vse').head(top_n).reset_index(drop=True)
     return c
 
-
-
+#maakt indexlijsten per component voor elk slot
+def _build_index_by_tag(cands: pd.DataFrame):
+    by = { 'bread_base': [], 'bread_spread': [], 'veg': [], 'carb': [], 'protein': [], 'composed': [] }
+    for i, tags in enumerate(cands['tags']):
+        for t in by.keys():
+            if t in tags:
+                by[t].append(i)
+    return by
 
 def solve_plan_pulp(df: pd.DataFrame,
                     protein_limit: float,
@@ -97,9 +157,8 @@ def solve_plan_pulp(df: pd.DataFrame,
             prob += s[(slot,i)] <= max_serv * y[(slot,i)]
             prob += s[(slot,i)] >= min_serv * y[(slot,i)]
 
-        # >>> HIER de nieuwe 'meerdere producten' constraint <<<
-        prob += pulp.lpSum(y[(slot,i)] for i in range(len(cands))) <= 2
-        #prob += cands[i] in brood and cands[j] in beleg
+        # 'meerdere producten' constraint
+        prob += pulp.lpSum(y[(slot,i)] for i in range(len(cands))) <= 3
 
     # Daglimiet eiwit
     total_protein = pulp.lpSum(
@@ -117,6 +176,70 @@ def solve_plan_pulp(df: pd.DataFrame,
                 name_occ.setdefault(nm, []).append((slot, i))
         for nm, occ in name_occ.items():
             prob += pulp.lpSum(y[(slot,i)] for (slot,i) in occ if (slot,i) in y) <= 1
+
+
+    # --- NIEUW: indices per tag per slot ---
+    idx_by_slot = {slot: _build_index_by_tag(candidates[slot]) for slot in slots}
+
+    # --- NIEUW: brood + beleg constraints (ontbijt & lunch) ---
+    # Guard: voeg alleen toe als er ten minste brood of beleg kandidaten zijn
+    for slot in ['ontbijt', 'lunch']:
+        base_idx = idx_by_slot[slot]['bread_base']
+        spread_idx = idx_by_slot[slot]['bread_spread']
+        if len(base_idx) + len(spread_idx) == 0:
+            continue  # niets te doen in dit slot
+
+        BB   = pulp.lpSum(y[(slot,i)] for i in base_idx)
+        SP   = pulp.lpSum(y[(slot,i)] for i in spread_idx)
+        BB_s = pulp.lpSum(s[(slot,i)] for i in base_idx)
+        SP_s = pulp.lpSum(s[(slot,i)] for i in spread_idx)
+
+        # (1) ten minste evenveel beleg-items als brood-items
+        prob += SP >= BB
+
+        # (2) geen beleg zonder brood (big-M = 3, want max 3 items per slot)
+        prob += SP <= 3 * BB
+
+        # (3) servings koppeling: ~1 beleg per snee (marge toegestaan)
+        prob += SP_s == BB_s
+
+    # --- NIEUW: diner compositie (groente + carb + eiwit óf samengesteld) ---
+    slot = 'avondeten'
+    comp_idx = idx_by_slot[slot]['composed']
+    veg_idx  = idx_by_slot[slot]['veg']
+    carb_idx = idx_by_slot[slot]['carb']
+    prot_idx = idx_by_slot[slot]['protein']
+
+    # Voeg constraints toe alleen als er ten minste één kandidaat in de relevante sets zit,
+    # om infeasibiliteit bij lege datasets te voorkomen.
+    if len(comp_idx) + len(veg_idx) + len(carb_idx) + len(prot_idx) > 0:
+        COMP  = pulp.lpSum(y[(slot,i)] for i in comp_idx)
+        VEG   = pulp.lpSum(y[(slot,i)] for i in veg_idx)
+        CARB  = pulp.lpSum(y[(slot,i)] for i in carb_idx)
+        PROT  = pulp.lpSum(y[(slot,i)] for i in prot_idx)
+
+        # component- of samengesteld gerecht
+        if len(veg_idx) + len(comp_idx) > 0:
+            prob += VEG   + COMP >= 1
+        if len(carb_idx) + len(comp_idx) > 0:
+            prob += CARB  + COMP >= 1
+        if len(prot_idx) + len(comp_idx) > 0:
+            prob += PROT  + COMP >= 1
+
+        # (optioneel) minimale servings per component als er géén samengesteld gerecht is:
+        VEG_s  = pulp.lpSum(s[(slot,i)] for i in veg_idx)
+        CARB_s = pulp.lpSum(s[(slot,i)] for i in carb_idx)
+        PROT_s = pulp.lpSum(s[(slot,i)] for i in prot_idx)
+
+        M = 10  # big-M
+        VEG_MIN, CARB_MIN, PROT_MIN = 1.0, 1.0, 1.0  # in VSE; pas aan naar wens
+        if len(veg_idx) > 0:
+            prob += VEG_s  >= VEG_MIN  - M * COMP
+        if len(carb_idx) > 0:
+            prob += CARB_s >= CARB_MIN - M * COMP
+        if len(prot_idx) > 0:
+            prob += PROT_s >= PROT_MIN - M * COMP
+
 
     # Doel: maximaliseer kcal
     total_kcal = pulp.lpSum(
@@ -162,5 +285,10 @@ def solve_plan_pulp(df: pd.DataFrame,
  
 if __name__ == "__main__":
     df = pd.read_csv("data/product_list.csv", sep=';')
-    df  = prepare_df_for_solver(df)
-    solve_plan_pulp(df, protein_limit=10.0, min_serv=0.5, max_serv=2.0)
+    df  = prepare_df(df)
+    plan_df, totals = solve_plan_pulp(df, protein_limit=10.0, min_serv=0.5, max_serv=2.0)
+    if plan_df is None:
+        print("Geen optimale oplossing:", totals)
+    else:
+        print(plan_df)
+        print("\nTotals:", totals)
