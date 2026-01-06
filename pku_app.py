@@ -1,3 +1,4 @@
+from helper import prepare_df_for_solver, solve_plan_pulp
 import streamlit as st
 import pandas as pd
 from io import BytesIO
@@ -10,7 +11,7 @@ if "dagplanning" not in st.session_state:
 
 
 # Upload bestand
-bron = st.radio("Kies gegevensbron:", ["Upload bestand", "Gebruik voorbeeldbestand"])
+bron = st.radio("Kies gegevensbron:", ["Gebruik voorbeeldbestand", "Upload bestand"])
 
 if bron == "Upload bestand":
     uploaded_file = st.file_uploader("Upload je bestand (CSV of Excel)", type=["csv", "xlsx"])
@@ -47,136 +48,191 @@ if 'df' in locals():
     st.write("📊 Gegevens ingeladen:")
     st.dataframe(df)
 
+    methode = st.radio("Kies methode:", ["Doe een voorstel", "Maak een eigen dagplanning"])
+    
+    if methode == "Doe een voorstel":
+        
+        st.markdown("### 💡 Plan-voorstel")
+
+        df_solver = prepare_df_for_solver(df)
+
+        daglimiet_eiwit = st.slider("Daglimiet eiwit (g)", 1.0, 20.0, 5.0, 0.5)
+        min_serv_vse   = st.number_input("Minimale portiegrootte (VSE)", value=0.5, min_value=0.1, step=0.1)
+        max_serv_vse   = st.number_input("Maximale portiegrootte (VSE)", value=2.0, min_value=min_serv_vse, step=0.1)
+        uniek_product  = st.checkbox("Voorkom hetzelfde product in meerdere maaltijden", value=True)
+
+        if st.button("🔎 Maak voorstel"):
+            try:
+                plan_df, totals = solve_plan_pulp(
+                    df_solver,
+                    protein_limit=daglimiet_eiwit,
+                    min_serv=min_serv_vse,
+                    max_serv=max_serv_vse,
+                    unique_product=uniek_product
+                )
+            except ModuleNotFoundError:
+                st.error("PuLP is niet geïnstalleerd. Installeer met `pip install pulp`.")
+                plan_df, totals = None, None
+
+            if plan_df is None:
+                st.warning(f"Geen optimaal plan (status: {totals.get('status','n/a')}). "
+                        "Verhoog de daglimiet of verlaag min. VSE / aantal producten.")
+            else:
+                st.subheader("✨ Voorgestelde dagindeling (meerdere producten)")
+                st.dataframe(plan_df, use_container_width=True)
+                st.write(totals)
+
+                # Toevoegen aan dagplanning (werkt ook met meerdere items per maaltijd)
+                if st.button("➕ Voeg voorstel toe aan dagplanning"):
+                    for _, r in plan_df.iterrows():
+                        hoeveel_str   = str(r['VSE gram/ml'])
+                        gramm_per_vse = int(''.join(filter(str.isdigit, hoeveel_str))) if hoeveel_str else 0
+                        grams         = round(float(r['Servings (VSE)']) * gramm_per_vse)
+
+                        st.session_state["dagplanning"].append({
+                            "Maaltijd": r['Maaltijd'],
+                            "Product": r['Product'],
+                            "Hoeveelheid (g)": grams,
+                            "Eiwit (g)": float(r['Eiwit (g)']),
+                            "Energie (kcal)": float(r['Energie (kcal)']),
+                            "Aantal VSE": float(r['Servings (VSE)']),
+                            "Kleurgroep": r['Kleurgroep']
+                        })
+                    st.success("Voorstel toegevoegd aan dagplanning.")
+
+    if methode == "Maak een eigen dagplanning":
+    
+        st.markdown("### Maak een eigen dagplanning")
+
+        #Filter op maaltijd type
+        maaltijd_type = st.selectbox("Kies maaltijd:", ["Ontbijt", "Tussendoor", "Lunch", "Snack", "Avondeten"])
+
+        # multi-select op kleur
+
+        # --- Kleurhulpjes ---
+        kleur_emojis = {"groen": "🟢", "oranje": "🟠", "rood": "🔴"}
+
+        # Normaliseer eventueel spaties/hoofdletters
+        alle_kleuren = ["groen", "oranje", "rood"]
+        default=alle_kleuren  # start met alles aan
+        format_func=lambda k: f"{kleur_emojis.get(k,'')} {k.capitalize()}"
+        gekozen_kleuren = st.multiselect(
+            "Filter op kleurgroep:",alle_kleuren, default, format_func=format_func)
+
+
+        # --- Extra filters:  Productgroep + Kleurgroep ---
+        productgroepen = sorted(df["Productgroep"].dropna().unique())
+        gekozen_groep = st.selectbox("Kies een productgroep:", productgroepen)
+
+        # Filter op groep én kleur
+        mask = (df["Productgroep"] == gekozen_groep) & (df["Kleurgroep"].isin(gekozen_kleuren))
+        gefilterde_df = df.loc[mask].copy()
+
+        if gefilterde_df.empty:
+            st.info("Geen producten voor deze combinatie van filters.")
+            st.stop()
+
+        product = st.selectbox("Kies een product:", gefilterde_df["Naam"].unique(), format_func= format_func)
+        product_kleur = df.loc[df["Naam"] == product]["Kleurgroep"].values[0]
+
+        # Invoer hoeveelheid
+
+        # Converteer Hoeveelheid gram/ml naar integer
+        hoeveelheid_str = gefilterde_df.loc[gefilterde_df["Naam"] == product, "Hoeveelheid gram/ml"].values[0]
+        hoeveelheid_per_vse = int(''.join(filter(str.isdigit, hoeveelheid_str))) if hoeveelheid_str else 0
+
+        hoeveelheid = st.number_input("Voer hoeveelheid in (gram):", min_value=1, step=1, value=hoeveelheid_per_vse)
+        
+        # Instelbare drempel
+        drempel_eiwit = st.slider("Stel eiwit-drempel in (gram):", min_value=1.0, max_value=20.0, value=5.0, step=0.1)
     
 
+        # Haal waarden op
+        eiwit_per_100g = gefilterde_df.loc[gefilterde_df["Naam"] == product, "Eiwit (g) per 100 gram"].values[0]
+        energie_per_100g = gefilterde_df.loc[gefilterde_df["Naam"] == product, "Energie (kcal) per 100 gram"].values[0]
 
-    #Filter op maaltijd type
-    maaltijd_type = st.selectbox("Kies maaltijd:", ["Ontbijt", "Tussendoor", "Lunch", "Snack", "Avondeten"])
+        # Converteer Hoeveelheid gram/ml naar integer
+        hoeveelheid_str = gefilterde_df.loc[gefilterde_df["Naam"] == product, "Hoeveelheid gram/ml"].values[0]
+        hoeveelheid_per_vse = int(''.join(filter(str.isdigit, hoeveelheid_str))) if hoeveelheid_str else 0
 
-    # multi-select op kleur
+        # Berekeningen
+        totaal_eiwit = (eiwit_per_100g * hoeveelheid) / 100
+        totaal_energie = (energie_per_100g * hoeveelheid) / 100
+        aantal_vse = hoeveelheid / hoeveelheid_per_vse if hoeveelheid_per_vse > 0 else 0
+        
+        # Output
+        st.subheader(f"✅ Resultaten voor {product}:")
+        st.write(f"- **Totaal eiwit:** {totaal_eiwit:.2f} g")
+        st.write(f"- **Totaal energie:** {totaal_energie:.2f} kcal")
+        st.write(f"- **Aantal VSE:** {aantal_vse:.2f} (1 VSE = {hoeveelheid_per_vse} gram)")
+        st.write(f"- **Kleurgroep:** {kleur_emojis.get(product_kleur,'')} {product_kleur.capitalize()}")
 
-    # --- Kleurhulpjes ---
-    kleur_emojis = {"groen": "🟢", "oranje": "🟠", "rood": "🔴"}
+        if st.button("➕ Voeg toe aan dagplanning"):
+            st.session_state["dagplanning"].append({
+                "Maaltijd": maaltijd_type,
+                "Product": product,
+                "Hoeveelheid (g)": hoeveelheid,
+                "Eiwit (g)": round(totaal_eiwit, 2),
+                "Energie (kcal)": round(totaal_energie, 2),
+                "Aantal VSE": round(aantal_vse, 2),
+                "Kleurgroep": f"{product_kleur}"
+            })
 
-    # Normaliseer eventueel spaties/hoofdletters
-    alle_kleuren = ["groen", "oranje", "rood"]
-    default=alle_kleuren  # start met alles aan
-    format_func=lambda k: f"{kleur_emojis.get(k,'')} {k.capitalize()}"
-    gekozen_kleuren = st.multiselect(
-        "Filter op kleurgroep:",alle_kleuren, default, format_func=format_func)
+    # Toon dagplanning
+    if st.session_state["dagplanning"]:
+        st.subheader("📅 Dagplanning")
+        dag_df = pd.DataFrame(st.session_state["dagplanning"])
+        st.table(dag_df)
 
 
-    # --- Extra filters:  Productgroep + Kleurgroep ---
-    productgroepen = sorted(df["Productgroep"].dropna().unique())
-    gekozen_groep = st.selectbox("Kies een productgroep:", productgroepen)
+        # Resetknop
+        if st.button("🔄 Reset dagplanning"):
+            st.session_state["dagplanning"] = []
+            st.rerun()
 
-    # Filter op groep én kleur
-    mask = (df["Productgroep"] == gekozen_groep) & (df["Kleurgroep"].isin(gekozen_kleuren))
-    gefilterde_df = df.loc[mask].copy()
 
-    if gefilterde_df.empty:
-        st.info("Geen producten voor deze combinatie van filters.")
-        st.stop()
+        # Bereken totaal
+        totaal_eiwit_dag = dag_df["Eiwit (g)"].sum()
+        totaal_energie_dag = dag_df["Energie (kcal)"].sum()
 
-    product = st.selectbox("Kies een product:", gefilterde_df["Naam"].unique(), format_func= format_func)
-    product_kleur = df.loc[df["Naam"] == product]["Kleurgroep"].values[0]
+        st.write(f"**Totaal eiwit vandaag:** {totaal_eiwit_dag:.2f} g")
+        st.write(f"**Totaal energie vandaag:** {totaal_energie_dag:.2f} kcal")
 
-    # Invoer hoeveelheid
 
-    # Converteer Hoeveelheid gram/ml naar integer
-    hoeveelheid_str = gefilterde_df.loc[gefilterde_df["Naam"] == product, "Hoeveelheid gram/ml"].values[0]
-    hoeveelheid_per_vse = int(''.join(filter(str.isdigit, hoeveelheid_str))) if hoeveelheid_str else 0
+        # Hoeveel eiwit nog over
+        eiwit_over = max(drempel_eiwit - totaal_eiwit_dag, 0)
+        st.write(f"**Nog beschikbaar tot limiet:** {eiwit_over:.2f} g eiwit")
 
-    hoeveelheid = st.number_input("Voer hoeveelheid in (gram):", min_value=1, step=1, value=hoeveelheid_per_vse)
-    
-    # Instelbare drempel
-    drempel_eiwit = st.slider("Stel eiwit-drempel in (gram):", min_value=1.0, max_value=20.0, value=5.0, step=0.1)
+        # ✅ Voortgangsbalk
+        progress = min(totaal_eiwit_dag / drempel_eiwit, 1.0)  # max 100%
+        st.progress(progress)
+
+
+        # Waarschuwing bij overschrijding drempel
+        if totaal_eiwit_dag > drempel_eiwit:
+            st.error(f"🚨 Waarschuwing: Het totaal eiwit ({totaal_eiwit_dag:.2f} g) is hoger dan de ingestelde drempel van {drempel_eiwit} g!")
+
+
+        # ✅ Exportknop naar Excel met openpyxl
+        buffer = BytesIO()
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            dag_df.to_excel(writer, index=False, sheet_name="Dagplanning")
+        st.download_button(
+            label="📥 Download dagplanning als Excel",
+            data=buffer.getvalue(),
+            file_name="dagplanning.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+
+        # Toon tabel met verwijderknoppen
+        for i, item in enumerate(st.session_state["dagplanning"]):
+            st.write(f"{i+1}. {item['Maaltijd']} - {item['Product']} ({item['Hoeveelheid (g)']} g) | "
+                    f"Eiwit: {item['Eiwit (g)']} g | Energie: {item['Energie (kcal)']} kcal | VSE: {item['Aantal VSE']} {kleur_emojis.get(item["Kleurgroep"],'')}")
+            if st.button(f"❌ Verwijder item {i+1}", key=f"remove_{i}"):
+                st.session_state["dagplanning"].pop(i)
+                st.rerun()  # herlaad de app om lijst te upd
+
+
+
  
-
-    # Haal waarden op
-    eiwit_per_100g = gefilterde_df.loc[gefilterde_df["Naam"] == product, "Eiwit (g) per 100 gram"].values[0]
-    energie_per_100g = gefilterde_df.loc[gefilterde_df["Naam"] == product, "Energie (kcal) per 100 gram"].values[0]
-
-    # Converteer Hoeveelheid gram/ml naar integer
-    hoeveelheid_str = gefilterde_df.loc[gefilterde_df["Naam"] == product, "Hoeveelheid gram/ml"].values[0]
-    hoeveelheid_per_vse = int(''.join(filter(str.isdigit, hoeveelheid_str))) if hoeveelheid_str else 0
-
-    # Berekeningen
-    totaal_eiwit = (eiwit_per_100g * hoeveelheid) / 100
-    totaal_energie = (energie_per_100g * hoeveelheid) / 100
-    aantal_vse = hoeveelheid / hoeveelheid_per_vse if hoeveelheid_per_vse > 0 else 0
-    
-    # Output
-    st.subheader(f"✅ Resultaten voor {product}:")
-    st.write(f"- **Totaal eiwit:** {totaal_eiwit:.2f} g")
-    st.write(f"- **Totaal energie:** {totaal_energie:.2f} kcal")
-    st.write(f"- **Aantal VSE:** {aantal_vse:.2f} (1 VSE = {hoeveelheid_per_vse} gram)")
-    st.write(f"- **Kleurgroep:** {kleur_emojis.get(product_kleur,'')} {product_kleur.capitalize()}")
-
-    if st.button("➕ Voeg toe aan dagplanning"):
-        st.session_state["dagplanning"].append({
-            "Maaltijd": maaltijd_type,
-            "Product": product,
-            "Hoeveelheid (g)": hoeveelheid,
-            "Eiwit (g)": round(totaal_eiwit, 2),
-            "Energie (kcal)": round(totaal_energie, 2),
-            "Aantal VSE": round(aantal_vse, 2),
-            "Kleurgroep": f"{product_kleur}"
-        })
-
-# Toon dagplanning
-if st.session_state["dagplanning"]:
-    st.subheader("📅 Dagplanning")
-    dag_df = pd.DataFrame(st.session_state["dagplanning"])
-    st.table(dag_df)
-
-
-    # Resetknop
-    if st.button("🔄 Reset dagplanning"):
-        st.session_state["dagplanning"] = []
-        st.rerun()
-
-
-    # Bereken totaal
-    totaal_eiwit_dag = dag_df["Eiwit (g)"].sum()
-    totaal_energie_dag = dag_df["Energie (kcal)"].sum()
-
-    st.write(f"**Totaal eiwit vandaag:** {totaal_eiwit_dag:.2f} g")
-    st.write(f"**Totaal energie vandaag:** {totaal_energie_dag:.2f} kcal")
-
-
-    # Hoeveel eiwit nog over
-    eiwit_over = max(drempel_eiwit - totaal_eiwit_dag, 0)
-    st.write(f"**Nog beschikbaar tot limiet:** {eiwit_over:.2f} g eiwit")
-
-    # ✅ Voortgangsbalk
-    progress = min(totaal_eiwit_dag / drempel_eiwit, 1.0)  # max 100%
-    st.progress(progress)
-
-
-    # Waarschuwing bij overschrijding drempel
-    if totaal_eiwit_dag > drempel_eiwit:
-        st.error(f"🚨 Waarschuwing: Het totaal eiwit ({totaal_eiwit_dag:.2f} g) is hoger dan de ingestelde drempel van {drempel_eiwit} g!")
-
-
-    # ✅ Exportknop naar Excel met openpyxl
-    buffer = BytesIO()
-    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        dag_df.to_excel(writer, index=False, sheet_name="Dagplanning")
-    st.download_button(
-        label="📥 Download dagplanning als Excel",
-        data=buffer.getvalue(),
-        file_name="dagplanning.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-
-    # Toon tabel met verwijderknoppen
-    for i, item in enumerate(st.session_state["dagplanning"]):
-        st.write(f"{i+1}. {item['Maaltijd']} - {item['Product']} ({item['Hoeveelheid (g)']} g) | "
-                 f"Eiwit: {item['Eiwit (g)']} g | Energie: {item['Energie (kcal)']} kcal | VSE: {item['Aantal VSE']} {kleur_emojis.get(item["Kleurgroep"],'')}")
-        if st.button(f"❌ Verwijder item {i+1}", key=f"remove_{i}"):
-            st.session_state["dagplanning"].pop(i)
-            st.rerun()  # herlaad de app om lijst te upd
-
-
