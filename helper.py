@@ -48,7 +48,6 @@ MEAL_GROUPS = {
     'fruit': ['Fruit'],
     'lunch': ['Brood en crackers', 
               'Salades', 
-              'Samengestelde gerechten', 
               'Soepen', 
               'Kaas',
               'Broodbeleg, hartig',
@@ -78,7 +77,8 @@ def component_tags(row) -> set[str]:
     tags = set()
 
     # --- broodbasis ---
-    if g == 'Brood en crackers':
+    if g == 'Brood en crackers' or \
+       re.search(r'\b(pizzabodem)\b', nm):
         tags.add('bread_base')
         # brood telt ook als koolhydraat (voor diner)
         tags.add('carb')
@@ -117,7 +117,7 @@ def get_candidates(df: pd.DataFrame, slot_key: str, top_n: int = 200) -> pd.Data
     c = c[c['kcal_vse'] > 0]
     c['tags'] = c.apply(component_tags, axis=1)
     # Houd de laagste-eiwit opties om het oplossen makkelijker te maken
-    c = c.sort_values('protein_vse').head(top_n).reset_index(drop=True)
+    c = c.sort_values('protein_vse').head(top_n).reset_index(drop=True) #vergroot top_n als je meer variatie wilt; verklein voor snellere solve‑tijden.
     return c
 
 #maakt indexlijsten per component voor elk slot
@@ -223,7 +223,7 @@ def solve_plan_pulp(df: pd.DataFrame,
 
 
     # (Optioneel) voorkom hergebruik van exact hetzelfde product (over alle maaltijden)
-    if unique_product:
+    if unique_product: 
         name_occ = {}
         for slot in slots:
             for i, nm in enumerate(candidates[slot]['naam']):
