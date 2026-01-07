@@ -1,4 +1,11 @@
 import pandas as pd # type: ignore
+import re
+from config import (
+    MEAL_GROUPS, EXCLUDE_GROUPS, ACCEPTABLE_VSE,
+    SLOT_MIN_PROTEIN, SLOT_MIN_KCAL,
+    SLOT_MAX_PROTEIN_PCT, SLOT_MAX_KCAL_PCT
+)
+
 
 # --- HELPER: kolomnamen normaliseren en decimale komma's ---
 def prepare_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -31,48 +38,6 @@ def prepare_df(df: pd.DataFrame) -> pd.DataFrame:
     df['hoeveelheid_per_vse'] = pd.to_numeric(num, errors='coerce')
     return df
 
-# --- HELPER: maaltijdgroepen ---
-ACCEPTABLE_VSE = {
-    'ontbijt': ['1 portie','1 schaaltje','1 glas','1 snee','1 stuk'],
-    'fruit':   ['1 stuk','1 schaaltje','1 handje','1 glas'],
-    'lunch':   ['1 snee','1 stuk','1 bolletje','1 kop','2 stuks','1 portie'],
-    'snack':   ['1 stuk','1 zakje','1 handje','2 stuks'],
-    'avondeten':['2 opscheplepels','1 portie','1 stuk']
-}
-
-MEAL_GROUPS = {
-    'ontbijt': [
-        'Graanproducten, pappen en bindmiddelen',
-        'Brood en crackers',
-        'Melk/yoghurtdrank',
-        'Melkproducten- Nagerechten',
-        'Kaas',
-        'Broodbeleg, hartig',
-        'Broodbeleg, zoet'
-    ],
-    'fruit': ['Fruit'],
-    'lunch': ['Brood en crackers', 
-              'Salades', 
-              'Soepen', 
-              'Kaas',
-              'Broodbeleg, hartig',
-              'Broodbeleg, zoet'],
-    'snack': ['Gebak en koek', 
-              'Snacks', 
-              'Noten, zaden en chips', 
-              'Chocola'],
-    'avondeten': ['Samengestelde gerechten', 
-                  'Aardappelen en knolgewassen',
-                  'Groenten en peulvruchten', 
-                  'Vis', 
-                  'Vlees en vleeswaren', 
-                  'Vegetarische producten']
-}
-
-EXCLUDE_GROUPS = {'Vetten, oliën en hartige sauzen', 'Kruiden en specerijen', 'Dieetpreparaten'}
-
-
-import re
 
 #geeft per kandidaat tags voor combinatieregels
 def component_tags(row) -> set[str]:
@@ -135,24 +100,6 @@ def _build_index_by_tag(cands: pd.DataFrame):
     return by
 
 
-# Minima per slot (pas aan naar jouw voorkeur)
-SLOT_MIN_PROTEIN = {
-    'ontbijt': 0.3,   # gram
-    'fruit':   0.0,
-    'lunch':   0.5,
-    'snack':   0.0,
-    'avondeten': 1.0
-}
-
-SLOT_MIN_KCAL = {
-    'ontbijt': 50,   # kcal
-    'fruit':    50,
-    'lunch':   100,
-    'snack':   50,
-    'avondeten': 200
-}
-
-
 def solve_plan_pulp(df: pd.DataFrame,
                     protein_limit: float,
                     kcal_limit: float,
@@ -205,6 +152,11 @@ def solve_plan_pulp(df: pd.DataFrame,
         if slot in SLOT_MIN_KCAL:
             prob += slot_kcal    >= SLOT_MIN_KCAL[slot]
 
+        if slot in SLOT_MAX_PROTEIN_PCT:
+            prob += slot_protein <= SLOT_MAX_PROTEIN_PCT[slot] * protein_limit
+
+        if slot in SLOT_MAX_KCAL_PCT:
+            prob += slot_kcal    <= SLOT_MAX_KCAL_PCT[slot]    * kcal_limit
 
     # Daglimiet eiwit
     total_protein = pulp.lpSum(
@@ -333,6 +285,7 @@ def solve_plan_pulp(df: pd.DataFrame,
        }
     
     return plan_df, totals
+
  
 if __name__ == "__main__":
     df = pd.read_csv("data/product_list.csv", sep=';')
