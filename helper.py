@@ -23,7 +23,12 @@ def prepare_df(df: pd.DataFrame) -> pd.DataFrame:
             .str.strip()
         )
         df[col] = pd.to_numeric(df[col], errors='raise').fillna(0)
+
+    # Converteer Hoeveelheid gram/ml naar integer
     
+    #Pak het eerste getal (met optionele decimalen) en zet komma om in punt
+    num = df['hoeveelheid'].str.extract(r'(\d+(?:[.,]\d+)?)')[0].str.replace(',', '.', regex=False)
+    df['hoeveelheid_per_vse'] = pd.to_numeric(num, errors='coerce')
     return df
 
 # --- HELPER: maaltijdgroepen ---
@@ -311,11 +316,11 @@ def solve_plan_pulp(df: pd.DataFrame,
                     'Maaltijd': slot.capitalize(),
                     'Product': chosen['naam'],
                     '1 VSE': chosen['vse_label'],
-                    'VSE gram/ml': chosen['hoeveelheid'],
-                    'Servings (VSE)': round(chosen_s, 2),
+                    'Hoeveelheid per VSE': chosen['hoeveelheid'],
+                    'Hoeveelheid (g/ml)': round(chosen['hoeveelheid_per_vse'] * chosen_s,2),
+                    'Aantal VSE': round(chosen_s, 2),
                     'Eiwit (g)': round(chosen['protein_vse'] * chosen_s, 2),
                     'Energie (kcal)': round(chosen['kcal_vse'] * chosen_s, 1),
-                    'Productgroep': chosen['productgroep'],
                     'Kleurgroep': chosen['kleurgroep']
                 })
 
