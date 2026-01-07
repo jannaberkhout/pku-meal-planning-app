@@ -199,7 +199,7 @@ if 'df' in locals():
 
             # Toon tabel met verwijderknoppen
             for i, item in enumerate(st.session_state["dagplanning"]):
-                st.write(f"{i+1}. {item['Maaltijd']} - {item['Product']} ({item['Hoeveelheid (g)']} g) | "
+                st.write(f"{i+1}. {item['Maaltijd']} - {item['Product']} ({item['Hoeveelheid (g/ml)']} g) | "
                         f"Eiwit: {item['Eiwit (g)']} g | Energie: {item['Energie (kcal)']} kcal | VSE: {item['Aantal VSE']} {kleur_emojis.get(item["Kleurgroep"],'')}")
                 if st.button(f"❌ Verwijder item {i+1}", key=f"remove_{i}"):
                     st.session_state["dagplanning"].pop(i)
