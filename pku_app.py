@@ -71,11 +71,11 @@ if 'df' in locals():
 
             if plan_df is None:
                 st.warning(f"Geen optimaal plan (status: {totals.get('status','n/a')}). "
-                        "Verhoog de daglimiet of verlaag min. VSE")
+                        "Verhoog de drempelwaarde voor caloriëen of eiwitten of verlaag min. VSE")
             else:
                 st.subheader("✨ Voorgestelde dagindeling")
                 st.dataframe(plan_df, use_container_width=True)
-                st.write(totals)
+                st.dataframe(totals, use_container_width=True)
 
     if methode == "Maak een eigen dagplanning":
     
@@ -143,7 +143,7 @@ if 'df' in locals():
             st.session_state["dagplanning"].append({
                 "Maaltijd": maaltijd_type,
                 "Product": product,
-                "Hoeveelheid (g)": hoeveelheid,
+                "Hoeveelheid (g/ml)": hoeveelheid,
                 "Eiwit (g)": round(totaal_eiwit, 2),
                 "Energie (kcal)": round(totaal_energie, 2),
                 "Aantal VSE": round(aantal_vse, 2),
