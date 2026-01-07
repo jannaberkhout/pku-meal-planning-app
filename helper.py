@@ -145,11 +145,11 @@ SLOT_MIN_PROTEIN = {
 }
 
 SLOT_MIN_KCAL = {
-    'ontbijt': 150,   # kcal
+    'ontbijt': 50,   # kcal
     'fruit':    50,
-    'lunch':   300,
-    'snack':   100,
-    'avondeten': 350
+    'lunch':   100,
+    'snack':   50,
+    'avondeten': 200
 }
 
 
@@ -221,6 +221,7 @@ def solve_plan_pulp(df: pd.DataFrame,
         for slot in slots for i in range(len(candidates[slot]))
         if (slot,i) in s
     )
+
     # Bovengrens kcal (optioneel)
     if kcal_limit is not None:
         prob += total_kcal <= kcal_limit
@@ -291,7 +292,7 @@ def solve_plan_pulp(df: pd.DataFrame,
         PROT_s = pulp.lpSum(s[(slot,i)] for i in prot_idx)
 
         M = 10  # big-M
-        VEG_MIN, CARB_MIN, PROT_MIN = 1.0, 1.0, 1.0  # in VSE; pas aan naar wens
+        VEG_MIN, CARB_MIN, PROT_MIN = 0.5, 0.5, 0.5  # in VSE; pas aan naar wens
         if len(veg_idx) > 0:
             prob += VEG_s  >= VEG_MIN  - M * COMP
         if len(carb_idx) > 0:
