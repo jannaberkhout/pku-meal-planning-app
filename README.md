@@ -1,5 +1,24 @@
 
-# PKU Meal Planner (PuLP ILP + Heuristiek)
+# PKU meal planner
+PKU-patiënten moeten dagelijks hun eiwitinname nauwkeurig monitoren. Deze app kan worden gebruikt om een dagplanning te maken die voldoet aan de ingestelde eiwit dag-limieten. 
+
+DISCLAIMER: gebruik de app op eigen risico
+
+In de app zijn er twee methodes om een dagplanning te maken:
+
+## 1.) Handmatig (maak een eigen dagplanning)
+ - Kies een maaltijd (ontbijt, lunch, avondeten)
+ - filter op productgroep, naam, kleurcategorie
+ - voer hoeveel gram/ml van het product (default = 1 VSE)
+ - zet een daglimiet voor eiwit 
+ - voeg het product toe aan de dagplanning
+
+ ### output
+ - totaal aantal kcal en eiwit voor het product
+ - progress bar voor daglimiet eiwit + restant eiwit over
+ - tabel met dagplanning + totalen (download de dagplanning als .xlsx file)
+
+ ## 2.) PuLP-ILP Solver (Doe een voorstel)
 
 Een compacte, uitbreidbare planner die per dag **ontbijt, fruit, lunch, snack en avondeten** voorstelt op basis van `product_list.csv`. De planner:
 
@@ -7,10 +26,9 @@ Een compacte, uitbreidbare planner die per dag **ontbijt, fruit, lunch, snack en
 - werkt met een **kcal-doel** (`kcal_limit`) en ondergrens (85%),
 - hanteert **slot-minima** (eiwit/kcal) en **slot-maxima als percentage van de daglimieten** (eiwit/kcal),
 - dwingt **brood + beleg** (1:1 servings) en **diner-compositie** (groente + carb + eiwitbron *óf* een samengesteld gerecht),
-- zorgt voor **exact 1** fruit én **exact 1** snack,
-- bevat een **sanity-check** die infeasible configuraties vroegtijdig detecteert.
+- zorgt voor **exact 1** fruit én **exact 1** snack
 
-> Ontworpen om flexibel te zijn: alle regels zijn configurabel via Python (`config.py`/`dataclass`).
+> Ontworpen om flexibel te zijn: alle regels zijn configurabel via Python (`config.py`).
 
 ---
 
@@ -34,26 +52,10 @@ Een compacte, uitbreidbare planner die per dag **ontbijt, fruit, lunch, snack en
 python -m venv .venv && source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
-
----
-
-## Streamlit
 run de app lokaal via je terminal:
 ```bash
 streamlit run pku_app.py
 ```
-In de app zijn er twee methodes om een dagplanning te maken:
-## 1.) Handmatig (maak een eigen dagplanning)
- -- Kies een maaltijd (ontbijt, lunch, avondeten)
- -- filter op productgroep, naam, kleurcategorie
- -- voer hoeveel gram/ml van het product (default = 1 VSE)
- -- zet een daglimiet voor eiwit 
- -- voeg het product toe aan de dagplanning
-
- ### output
- -- totaal aantal kcal en eiwit voor het product
- -- progress bar voor daglimiet eiwit + restant eiwit over
- -- tabel met dagplanning + totalen (download de dagplanning als .xlsx file)
 
 ## Data
 
@@ -153,3 +155,10 @@ Daarnaast print de solver een `Totals`‑samenvatting met **totaal eiwit/kcal** 
 
 Vrij te gebruiken
 de app wordt gehost op https://pku-app.streamlit.app/
+
+
+## Disclaimer
+
+Deze applicatie wordt aangeboden **zoals hij is** ("as is"). Gebruik is **op eigen risico**. Hoewel er zorg is besteed aan de juistheid en volledigheid, kan de software **fouten of onnauwkeurigheden** bevatten en worden **geen garanties** gegeven voor prestaties, resultaten of geschiktheid voor een bepaald doel.
+
+De maker/beheerder is **niet aansprakelijk** voor enige directe, indirecte, incidentele, bijzondere of gevolgschade die voortvloeit uit het gebruik, het niet kunnen gebruiken, of de resultaten van het gebruik van deze applicatie, dataset(s) of bijbehorende documentatie. Door de applicatie te gebruiken, ga je akkoord met deze voorwaarden.
