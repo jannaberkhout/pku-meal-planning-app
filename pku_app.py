@@ -68,17 +68,29 @@ if 'df' in locals():
 
     # --- Extra filters:  Productgroep + Kleurgroep ---
     productgroepen = sorted(df["Productgroep"].dropna().unique())
-    gekozen_groep = st.selectbox("Kies een productgroep:", productgroepen)
+    gekozen_groep = st.selectbox("Kies een productgroep:", productgroepen, index= None)
 
-    # Filter op groep én kleur
-    mask = (df["Productgroep"] == gekozen_groep) & (df["Kleurgroep"].isin(gekozen_kleuren))
-    gefilterde_df = df.loc[mask].copy()
+
+    if gekozen_groep is not None:
+        # Filter op groep én kleur
+        mask = (df["Productgroep"] == gekozen_groep) & (df["Kleurgroep"].isin(gekozen_kleuren))
+        gefilterde_df = df.loc[mask].copy()
+        product = st.selectbox("Kies een product:", gefilterde_df["Naam"].unique(), format_func= format_func, index=None)
+    else: 
+        mask = df["Kleurgroep"].isin(gekozen_kleuren)
+        gefilterde_df = df.loc[mask].copy()
+        product = st.selectbox("Kies een product:", gefilterde_df["Naam"].unique(), format_func= format_func, index=None)
+
+
+    if product is None:
+        st.info("Kies eerst een product.")
+        st.stop()
 
     if gefilterde_df.empty:
         st.info("Geen producten voor deze combinatie van filters.")
         st.stop()
-
-    product = st.selectbox("Kies een product:", gefilterde_df["Naam"].unique(), format_func= format_func)
+        
+        
     product_kleur = df.loc[df["Naam"] == product]["Kleurgroep"].values[0]
 
     # Invoer hoeveelheid
