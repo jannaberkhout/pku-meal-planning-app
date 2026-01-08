@@ -2,8 +2,6 @@
 # PKU meal planner
 PKU-patiënten moeten dagelijks hun eiwitinname nauwkeurig monitoren. Deze app kan worden gebruikt om een dagplanning te maken die voldoet aan de ingestelde eiwit dag-limieten. 
 
-DISCLAIMER: gebruik de app op eigen risico
-
 In de app zijn er twee methodes om een dagplanning te maken:
 
 ## 1.) Handmatig (maak een eigen dagplanning)
