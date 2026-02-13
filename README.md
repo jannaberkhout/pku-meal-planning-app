@@ -43,8 +43,6 @@ Gebruik de bijgevoegde CSV of een CSV zoals `product_list.csv` met ten minste de
 
 - `Naam`, `Eiwit (g) per VSE`, `Energie (kcal) per VSE`, `1 VSE`, `Hoeveelheid gram/ml`, `Kleurgroep`, `Productgroep`
 
-De helper `prepare_df(...)` normaliseert kolomnamen en zet decimale komma's om naar punten.
-
 ---
 
 
