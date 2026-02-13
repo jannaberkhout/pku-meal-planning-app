@@ -47,7 +47,7 @@ if 'df' in locals():
         
         st.markdown("### 💡 Plan-voorstel")
 
-        df_solver = df
+        df_solver = df.copy()
 
         drempel_eiwit = st.slider("Stel eiwit-drempel in (gram):", min_value=1.0, max_value=50.0, value=10.0, step=0.1)
         drempel_kcal = st.slider("Stel max kcal in:", min_value=1.0, max_value=3000.0, value=1000.0, step=1.0)
@@ -56,27 +56,31 @@ if 'df' in locals():
         uniek_product  = st.checkbox("Voorkom hetzelfde product in meerdere maaltijden", value=True)
 
         if st.button("🔎 Maak voorstel"):
-            try:
-                plan_df, totals = solve_plan_pulp(
-                    df_solver,
-                    protein_limit= drempel_eiwit,
-                    kcal_limit= drempel_kcal,
-                    min_serv=min_serv_vse,
-                    max_serv=max_serv_vse,
-                    unique_product=uniek_product
-                )
-            except ModuleNotFoundError:
-                st.error("PuLP is niet geïnstalleerd. Installeer met `pip install pulp`.")
-                plan_df, totals = None, None
+            for i_wd,wd in enumerate(["ma","di","wo","do","vr","za","zo"]):
+                try:
+                    plan_df, totals = solve_plan_pulp(
+                        df_solver,
+                        protein_limit= drempel_eiwit,
+                        kcal_limit= drempel_kcal,
+                        min_serv=min_serv_vse,
+                        max_serv=max_serv_vse,
+                        unique_product=uniek_product
+                    )
+                except ModuleNotFoundError:
+                    st.error("PuLP is niet geïnstalleerd. Installeer met `pip install pulp`.")
+                    plan_df, totals = None, None
 
-            if plan_df is None:
-                st.warning(f"Geen optimaal plan (status: {totals.get('status','n/a')}). "
-                        "Verhoog de drempelwaarde voor caloriëen of eiwitten of verlaag min. VSE")
-            else:
-                st.subheader("✨ Voorgestelde dagindeling")
-                st.dataframe(plan_df, use_container_width=True)
-                st.dataframe(totals, use_container_width=True)
-
+                if plan_df is None:
+                    st.warning(f"Geen optimaal plan (status: {totals.get('status','n/a')}). "
+                            "Verhoog de drempelwaarde voor caloriëen of eiwitten of verlaag min. VSE")
+                else:
+                    st.subheader("✨ Voorgestelde dagindeling "+wd)
+                    st.dataframe(plan_df, use_container_width=True)
+                    st.dataframe(totals, use_container_width=True)
+                    
+                    # Forceer variatie door de input lijst aan te passen
+                    df_solver = df_solver[~df_solver['naam'].isin(plan_df['Product'])]
+                    
     if methode == "Maak een eigen dagplanning":
     
         st.markdown("### Maak een eigen dagplanning")
@@ -200,7 +204,7 @@ if 'df' in locals():
             # Toon tabel met verwijderknoppen
             for i, item in enumerate(st.session_state["dagplanning"]):
                 st.write(f"{i+1}. {item['Maaltijd']} - {item['Product']} ({item['Hoeveelheid (g/ml)']} g) | "
-                        f"Eiwit: {item['Eiwit (g)']} g | Energie: {item['Energie (kcal)']} kcal | VSE: {item['Aantal VSE']} {kleur_emojis.get(item["Kleurgroep"],'')}")
+                        f"Eiwit: {item['Eiwit (g)']} g | Energie: {item['Energie (kcal)']} kcal | VSE: {item['Aantal VSE']} {kleur_emojis.get(item['Kleurgroep'],'')}")
                 if st.button(f"❌ Verwijder item {i+1}", key=f"remove_{i}"):
                     st.session_state["dagplanning"].pop(i)
                     st.rerun()  # herlaad de app om lijst te updaten
