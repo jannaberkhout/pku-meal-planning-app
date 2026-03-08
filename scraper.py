@@ -29,7 +29,6 @@ results = data.get('results', None)
 if not results:
     raise Exception("No results")
 
-# base_url = "https://www.voedingscentrum.nl/recepten/gezond-recept/"
 dir = 'recipes/'
 for recipe in results:
     key = recipe.get('key')
