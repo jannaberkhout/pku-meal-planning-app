@@ -1,8 +1,9 @@
 import bs4
 import os
-from recipe import Ingredient, Recipe
+#from recipe import Ingredient, Recipe
 import re
 import pandas as pd
+import json
 
 CSS_INGREDIENTS = "div.ingredienten li"
 CSS_INFO_PERSONEN = "div.informatie.detail li.personen"
@@ -12,6 +13,7 @@ CSS_INFO_RECEPTCAT = "div.informatie.detail li.gerecht"
 CSS_INFO_CALORIEN = "div.informatie.detail li.calorieen"
 CSS_PROTEIN = 'td[itemprop="proteinContent"]'
 CSS_H1 = "h1"
+CSS_INFO_URL = "script[type='application/ld+json']"
 
 rows = []
 dir = 'recipes/'
@@ -34,10 +36,19 @@ for file_name in os.listdir(dir):
     instructions = soup.select_one(CSS_INFO_INSTRUCTIES).text
     receptcat = soup.select_one(CSS_INFO_RECEPTCAT).text.strip().split(",")
     ingredients = [ingredient.text for ingredient in soup.select(CSS_INGREDIENTS)]
-
-    #rec = Recipe(name=name, n_persons= n_persons, preptime= preptime, ingredients=ingredients, instructions = instructions, protein=protein, calories=calories, receptcat= receptcat) 
-    #print(rec)
     
+
+    # extract url from ld+json
+    url = None
+    json_tag = soup.select_one(CSS_INFO_URL)
+    if json_tag:
+        try:
+            data = json.loads(json_tag.string)
+            # BreadcrumbList → itemListElement → last item → "item"
+            url = data.get("itemListElement", [])[-1].get("item")
+        except Exception as e:
+            print("Could not parse JSON-LD:", e)
+
 
 # voeg rij toe voor DataFrame
     rows.append({
@@ -48,11 +59,12 @@ for file_name in os.listdir(dir):
         "receptcat": receptcat,
         "n_persons": n_persons,
         "calories": calories,
-        "protein": protein
+        "protein": protein,
+        "url":url
     })
 
 # maak DataFrame in één keer
-df = pd.DataFrame(rows, columns=["name", "ingredients", "instructions", "preptime", "receptcat", "n_persons", "calories", "protein"])
+df = pd.DataFrame(rows, columns=["name", "url", "ingredients", "instructions", "preptime", "receptcat", "n_persons", "calories", "protein"])
 
 pd.to_pickle(df, "data/veggie_recipes_struct.pkl")
 print("data was succesfully saved")

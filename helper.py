@@ -88,25 +88,38 @@ def solve_plan_pulp(df: pd.DataFrame,
     import pulp
 
     slots = ['tussendoor', 'lunch', 'ontbijt', 'hoofdgerecht']
+
+    required_picks = {'ontbijt': 1, 'lunch': 1, 'tussendoor': 2, 'hoofdgerecht': 1}
+
     candidates = {s: get_candidates(df, s) for s in slots}
+
+
+    # Early validation: ensure each required slot has at least 1 candidate
+    empty_slots = [s for s in slots if len(candidates[s]) < required_picks[s]]
+    if empty_slots:
+        raise ValueError(
+            f"No candidates available for required slot(s): {', '.join(empty_slots)}. "
+            f"Please adjust filters or provide recipes for these categories."
+        )
+
 
     prob = pulp.LpProblem('PKU_MealPlan', pulp.LpMaximize)
     y, s = {}, {}
 
     # Variabelen + constraints per slot
+    
     for slot in slots:
         cands = candidates[slot]
-        if len(cands) == 0:
-            # Geen kandidaten -> maak model infeasible
-            prob += 0 == 1
-            continue
-
         for i in range(len(cands)):
-            y[(slot,i)] = pulp.LpVariable(f'y_{slot}_{i}', lowBound=0, upBound=1, cat='Binary')
-            s[(slot,i)] = pulp.LpVariable(f's_{slot}_{i}', lowBound=0, upBound=max_serv, cat='Continuous')
-            # Link s aan y
-            prob += s[(slot,i)] <= max_serv * y[(slot,i)]
-            prob += s[(slot,i)] >= min_serv * y[(slot,i)]
+            y[(slot, i)] = pulp.LpVariable(f'y_{slot}_{i}', lowBound=0, upBound=1, cat='Binary')
+            s[(slot, i)] = pulp.LpVariable(f's_{slot}_{i}', lowBound=0, upBound=max_serv, cat='Continuous')
+            # Link: s == 0 when y == 0, s in [min_serv, max_serv] when y == 1
+            prob += s[(slot, i)] <= max_serv * y[(slot, i)]
+            prob += s[(slot, i)] >= min_serv * y[(slot, i)]
+
+        # ✅ precies 1 recept per slot
+        prob += pulp.lpSum(y[(slot, i)] for i in range(len(cands))) == required_picks[slot]
+
 
 
     # Daglimiet eiwit
@@ -128,7 +141,7 @@ def solve_plan_pulp(df: pd.DataFrame,
     # Bovengrens kcal (optioneel)
     if kcal_limit is not None:
         prob += total_kcal <= kcal_limit
-        prob += total_kcal >= kcal_limit*0.85
+        prob += total_kcal >= kcal_limit*0.5
 
 
     # (Optioneel) voorkom hergebruik van exact hetzelfde product (over alle maaltijden)
@@ -157,6 +170,7 @@ def solve_plan_pulp(df: pd.DataFrame,
                 rows.append({
                     'Maaltijd': slot.capitalize(),
                     'Recept': chosen['name'],
+                    'url': chosen['url'],
                     'Personen': chosen['n_persons'],
                     'Aantal VSE': round(chosen_s, 2),
                     'Eiwit (g)': round(chosen['protein'] * chosen_s, 2),
