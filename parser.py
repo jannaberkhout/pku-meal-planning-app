@@ -32,7 +32,7 @@ for file_name in os.listdir(dir):
     n_persons = int(re.findall(r'\d+', soup.select_one(CSS_INFO_PERSONEN).text)[0])
     preptime = soup.select_one(CSS_INFO_BEREIDINGSTIJD).text
     instructions = soup.select_one(CSS_INFO_INSTRUCTIES).text
-    receptcat = soup.select_one(CSS_INFO_RECEPTCAT).text
+    receptcat = soup.select_one(CSS_INFO_RECEPTCAT).text.strip().split(",")
     ingredients = [ingredient.text for ingredient in soup.select(CSS_INGREDIENTS)]
 
     #rec = Recipe(name=name, n_persons= n_persons, preptime= preptime, ingredients=ingredients, instructions = instructions, protein=protein, calories=calories, receptcat= receptcat) 
@@ -45,12 +45,14 @@ for file_name in os.listdir(dir):
         "ingredients": ingredients,     # string zodat df het netjes weergeeft
         "instructions": instructions,
         "preptime": preptime,
+        "receptcat": receptcat,
         "n_persons": n_persons,
         "calories": calories,
         "protein": protein
     })
 
 # maak DataFrame in één keer
-df = pd.DataFrame(rows, columns=["name", "ingredients", "instructions", "preptime", "n_persons", "calories", "protein"])
+df = pd.DataFrame(rows, columns=["name", "ingredients", "instructions", "preptime", "receptcat", "n_persons", "calories", "protein"])
 
 pd.to_pickle(df, "data/veggie_recipes_struct.pkl")
+print("data was succesfully saved")
