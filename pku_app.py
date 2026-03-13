@@ -48,7 +48,9 @@ if methode == "Doe een voorstel":
                         "Verhoog de drempelwaarde voor caloriëen of eiwitten of verlaag min. VSE")
             else:
                 st.subheader("✨ Voorgestelde dagindeling "+wd)
-                st.dataframe(plan_df, use_container_width=True)
+                st.dataframe(plan_df, use_container_width=True, column_config={
+        "url": st.column_config.LinkColumn()
+    })
                 st.dataframe(totals, use_container_width=True)
                 
                 # Forceer variatie door de input lijst aan te passen
