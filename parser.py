@@ -16,6 +16,8 @@ CSS_H1 = "h1"
 rows = []
 dir = 'recipes/'
 for file_name in os.listdir(dir):
+    if not file_name.endswith(".html"):
+        continue
     with open(dir + file_name, 'r') as f:
         content = f.read()
     soup = bs4.BeautifulSoup(content, features="html.parser")
